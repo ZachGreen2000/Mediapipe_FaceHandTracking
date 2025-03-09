@@ -37,7 +37,21 @@ class GestureRecogniser():
 class FaceRecogniser():
     def __init__(self):
       self.face_map = mp.solutions.face_map.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-      
+      self.initial_nose = None
+      self.face_gesture
+
+    def detect_movement(self, image):
+      results = self.face_map.process(image)
+      if not results.multi_face_landmarks:
+        return None
+      face_landmarks = results.multi_face_landmarks[0] # get face
+      # to detect mouth moving
+      top_lip = face_landmarks.landmarks[13] # id of landmark matches face position
+      bottom_lip = face_landmarks.landmarks[14]
+      lip_distance = abs(top_lip - bottom_lip)
+      if lip_distance > 0.2:
+        self.face_gesture = "Talking!"
+      #to detect head shaking
 
 class HandFaceTrackApp():
     def __init__(self, model_path, webcam_id=0):
@@ -49,6 +63,7 @@ class HandFaceTrackApp():
       print("Webcam initialised")
       self.gesture_recognizer_handler = GestureRecogniser(model_path)
       self.mp_hands = mp.solutions.hands
+      self.face_recogniser_handler = FaceRecogniser()
       self.mp_face_detection = mp.solutions.face_detection
       self.mp_drawing = mp.solutions.drawing_utils
       self.mp_drawing_styles = mp.solutions.drawing_styles
@@ -67,6 +82,8 @@ class HandFaceTrackApp():
             if time.time() - self.gesture_recognizer_handler.gesture_timestamp < 2:   
                 #display text for which gesture
                 cv2.putText(image, self.gesture_recognizer_handler.gesture_text, (50, 50),
+                            cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(image, self.face_recogniser_handler.face_gesture, (100,100), 
                             cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
         else:
           print("Error: Invalid image passed to displayText")
