@@ -41,7 +41,7 @@ class GestureRecogniser():
         self.explosion_images.append(img)
       #changing colour and size of images
       self.explosion_images = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in self.explosion_images]
-      self.explosion_images = [cv2.resize(img, (50, 50), interpolation=cv2.INTER_AREA) for img in self.explosion_images]
+      self.explosion_images = [cv2.resize(img, (100, 100), interpolation=cv2.INTER_AREA) for img in self.explosion_images]
       self.explosion_index  = 0
       self.explosion_active = False
       self.explosion_position = None
@@ -159,6 +159,7 @@ class drawingApp():
       self.selected_colour = (255,255,255)
       self.drawing = False
       self.prev_position = None
+      self.drawn_positions = []
     
     def draw_palette(self, image):
       for x, y, r, colour in self.colour_palette:
@@ -174,8 +175,10 @@ class drawingApp():
       return False
     
     def draw(self, image, x, y):
-      if self.drawing:
-        cv2.circle(image, (x, y), 10, self.selected_colour, -1)
+      if self.drawing and self.prev_position:
+        self.drawn_positions.append((x, y))
+      for position in self.drawn_positions:  
+        cv2.circle(image, position, 10, self.selected_colour, -1)
       self.prev_position = (x, y)
 
 class HandFaceTrackApp():
@@ -194,6 +197,8 @@ class HandFaceTrackApp():
       self.mp_drawing = mp.solutions.drawing_utils
       self.mp_drawing_styles = mp.solutions.drawing_styles
       self.model_path = model_path
+      self.x = 0
+      self.y = 0
 
     def frame(self, image):
       image.flags.writeable = False
@@ -269,15 +274,15 @@ class HandFaceTrackApp():
                   self.mp_drawing_styles.get_default_hand_connections_style())
               #logic for drawing app takes index finger top point and pointing up gesture to initiate drawing
               index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
-              x , y = int(index_tip.x * image.shape[1]), int(index_tip.y * image.shape[0])
+              self.x , self.y = int(index_tip.x * image.shape[1]), int(index_tip.y * image.shape[0])
               if self.gesture_recognizer_handler.gesture_name.lower() == "pointing_up":
                 #print("Drawing started")
                 self.drawingApp.drawing = True
-                self.drawingApp.draw(image, x, y)
               else:
                 self.drawingApp.drawing = False
                 self.drawingApp.prev_position = None
-              self.drawingApp.select_color(x,y)
+              self.drawingApp.select_color(self.x, self.y)
+          self.drawingApp.draw(image, self.x, self.y)
           self.drawingApp.draw_palette(image)
           # Flip the image horizontally for a selfie-view display.
           flipped_image = cv2.flip(image, 1)
