@@ -38,6 +38,8 @@ class GestureRecogniser():
         else:
           print(f"Image loaded: {path}")
         self.explosion_images.append(img)
+      #changing colour and size of images
+      self.explosion_images = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in self.explosion_images]
       self.explosion_images = [cv2.resize(img, (50, 50), interpolation=cv2.INTER_AREA) for img in self.explosion_images]
       self.explosion_index  = 0
       self.explosion_active = False
@@ -80,20 +82,21 @@ class GestureRecogniser():
       if self.explosion_active:
         #print("Explosion is active") #debug
         elapsed_time = time.time() - self.explosion_start
-        frame_duration = 0.5
+        frame_duration = 0.1
         #print(f"Elapsed time: {elapsed_time}")
         #print(f"Below if check calc: {self.explosion_index * frame_duration}") # debug
-        if elapsed_time > self.explosion_index * frame_duration:
+        if elapsed_time > frame_duration:
           print(f"Explosion Frame: {self.explosion_index}") #debug
           image = self.overlayExplosion(image)
           self.explosion_index += 1
+          self.explosion_start = time.time()
           if self.explosion_index >= len(self.explosion_images):
             self.explosion_active = False
             self.explosion_index = 0
     
     def overlayExplosion(self, image):
       # function houses logic for overlaying explosion on camera frame
-      if self.explosion_position:
+      if self.explosion_position and self.explosion_active:
         print(f"Explosion Position: {self.explosion_position}") #debug
         h, w, _ = image.shape
         x = int(self.explosion_position[0] * w)
