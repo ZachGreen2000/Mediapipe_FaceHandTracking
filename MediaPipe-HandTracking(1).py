@@ -10,6 +10,7 @@ class GestureRecogniser():
     def __init__(self, model_path):
       self.model_path = model_path
       self.gesture_text = ""
+      self.gesture_name = ""
       self.gesture_timestamp = 0
       #setting up gesture object
       self.BaseOptions = mp.tasks.BaseOptions
@@ -51,16 +52,16 @@ class GestureRecogniser():
        exploadSound = pygame.mixer.Sound("explosion.wav") #stores sound effect
        if result.gestures:
         #get confidence of gesture
-        gesture_name = result.gestures[0][0].category_name
+        self.gesture_name = result.gestures[0][0].category_name
         confidence = result.gestures[0][0].score
         #print(result)
         #gesture detection for name displaying and explosion logic
-        if confidence > 0.5 and gesture_name:
-            self.gesture_text = f"Gesture: {gesture_name}"
+        if confidence > 0.5 and self.gesture_name:
+            self.gesture_text = f"Gesture: {self.gesture_name}"
             self.gesture_timestamp = time.time()
             print(self.gesture_text)
             #detect transition for explosion flag
-            if gesture_name.lower() == "open_palm":
+            if self.gesture_name.lower() == "open_palm":
               print("Open Palm is happenning")
               self.explosion_active = True
               self.explosion_start = time.time()
@@ -146,6 +147,37 @@ class FaceRecogniser():
         self.gesture_timestamp_face = time.time()
       self.initial_nose = current_nose
 
+class drawingApp():
+    def __init__(self):
+      self.colour_palette = [
+          (50, 50, 20, (0,0,255)),
+          (150, 50, 20, (0,255,0)),
+          (250, 50, 20, (255,0,0)),
+          (350, 50, 20, (0,255,255)),
+          (450, 50, 20, (200,0,150))
+      ]
+      self.selected_colour = (255,255,255)
+      self.drawing = False
+      self.prev_position = None
+    
+    def draw_palette(self, image):
+      for x, y, r, colour in self.colour_palette:
+        cv2.circle(image, (x, y), r, colour, -1)
+    
+    def select_color(self, x, y):
+      for cx, cy, r, colour in self.colour_palette:
+        print(f"Coordinates: {x}, {y} vs circle: {cx}, {cy}")
+        if (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2:
+          print(f"changed colour: {self.selected_colour}")
+          self.selected_colour = colour
+          return True
+      return False
+    
+    def draw(self, image, x, y):
+      if self.drawing:
+        cv2.circle(image, (x, y), 10, self.selected_colour, -1)
+      self.prev_position = (x, y)
+
 class HandFaceTrackApp():
     def __init__(self, model_path, webcam_id=0):
       print("Initialising webcam...")
@@ -158,6 +190,7 @@ class HandFaceTrackApp():
       self.mp_hands = mp.solutions.hands
       self.face_recogniser_handler = FaceRecogniser()
       self.mp_face_detection = mp.solutions.face_detection
+      self.drawingApp = drawingApp()
       self.mp_drawing = mp.solutions.drawing_utils
       self.mp_drawing_styles = mp.solutions.drawing_styles
       self.model_path = model_path
@@ -174,10 +207,12 @@ class HandFaceTrackApp():
           if image.shape[0] > 0 and image.shape[1] > 0:
             if time.time() - self.gesture_recognizer_handler.gesture_timestamp < 2:   
                 #display text for which gesture
-                cv2.putText(image, self.gesture_recognizer_handler.gesture_text, (50, 50),
+                cv2.rectangle(image, (50, 370), (400, 410), (19, 69, 139), 50)
+                cv2.putText(image, self.gesture_recognizer_handler.gesture_text, (50, 400),
                             cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
             if time.time() - self.face_recogniser_handler.gesture_timestamp_face < 2: # display for face
-                cv2.putText(image, self.face_recogniser_handler.face_gesture, (100,100), 
+                cv2.rectangle(image, (400, 370), (620, 410), (19, 69, 139), 50)
+                cv2.putText(image, (self.face_recogniser_handler.face_gesture), (390,400), 
                             cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
         else:
           print("Error: Invalid image passed to displayText")
@@ -232,7 +267,18 @@ class HandFaceTrackApp():
                   self.mp_hands.HAND_CONNECTIONS,
                   self.mp_drawing_styles.get_default_hand_landmarks_style(),
                   self.mp_drawing_styles.get_default_hand_connections_style())
-              
+              #logic for drawing app takes index finger top point and pointing up gesture to initiate drawing
+              index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
+              x , y = int(index_tip.x * image.shape[1]), int(index_tip.y * image.shape[0])
+              if self.gesture_recognizer_handler.gesture_name.lower() == "pointing_up":
+                #print("Drawing started")
+                self.drawingApp.drawing = True
+                self.drawingApp.draw(image, x, y)
+              else:
+                self.drawingApp.drawing = False
+                self.drawingApp.prev_position = None
+              self.drawingApp.select_color(x,y)
+          self.drawingApp.draw_palette(image)
           # Flip the image horizontally for a selfie-view display.
           flipped_image = cv2.flip(image, 1)
           if flipped_image is None or flipped_image.size == 0:
