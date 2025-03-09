@@ -36,22 +36,29 @@ class GestureRecogniser():
 
 class FaceRecogniser():
     def __init__(self):
-      self.face_map = mp.solutions.face_map.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+      self.face_mesh = mp.solutions.face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
       self.initial_nose = None
-      self.face_gesture
+      self.face_gesture = ""
+      self.gesture_timestamp_face = 0
 
     def detect_movement(self, image):
-      results = self.face_map.process(image)
+      results = self.face_mesh.process(image)
       if not results.multi_face_landmarks:
         return None
       face_landmarks = results.multi_face_landmarks[0] # get face
       # to detect mouth moving
-      top_lip = face_landmarks.landmarks[13] # id of landmark matches face position
-      bottom_lip = face_landmarks.landmarks[14]
-      lip_distance = abs(top_lip - bottom_lip)
-      if lip_distance > 0.2:
+      top_lip = face_landmarks.landmark[13] # id of landmark matches face position
+      bottom_lip = face_landmarks.landmark[14]
+      lip_distance = abs(top_lip.y - bottom_lip.y)
+      if lip_distance > 0.02:
         self.face_gesture = "Talking!"
+        self.gesture_timestamp_face = time.time()
       #to detect head shaking
+      current_nose = face_landmarks.landmark[1].x
+      if self.initial_nose is not None and abs(current_nose - self.initial_nose) > 0.05:
+        self.face_gesture = "Head shaking!"
+        self.gesture_timestamp_face = time.time()
+      self.initial_nose = current_nose
 
 class HandFaceTrackApp():
     def __init__(self, model_path, webcam_id=0):
@@ -83,6 +90,7 @@ class HandFaceTrackApp():
                 #display text for which gesture
                 cv2.putText(image, self.gesture_recognizer_handler.gesture_text, (50, 50),
                             cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
+            if time.time() - self.face_recogniser_handler.gesture_timestamp_face < 2: # display for face
                 cv2.putText(image, self.face_recogniser_handler.face_gesture, (100,100), 
                             cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
         else:
@@ -119,6 +127,8 @@ class HandFaceTrackApp():
           mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
           self.gesture_recognizer_handler.recognizer.recognize_async(mp_image,
                                                                       timestamp_ms=cv2.getTickCount())
+          #call face function
+          self.face_recogniser_handler.detect_movement(image)
           
           # Draw the hand annotations on the image.
           image.flags.writeable = True
