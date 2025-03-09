@@ -11,6 +11,8 @@ class GestureRecogniser():
       self.model_path = model_path
       self.gesture_text = ""
       self.gesture_timestamp = 0
+      self.current_gesture = ""
+      self.previous_gesture = ""
       #setting up gesture object
       self.BaseOptions = mp.tasks.BaseOptions
       self.GestureRecognizer = vision.GestureRecognizer
@@ -24,27 +26,84 @@ class GestureRecogniser():
       self.recognizer = self.GestureRecognizer.create_from_options(options)
       # array of explosion images
       self.explosion_images = [
-        cv2.imread("explosion1.png"),
-        cv2.imread("explosion2.pmg"),
-        cv2.imread("explosion3.png"),
-        cv2.imread("explosion4.png"),
-        cv2.imread("explosion5.png")
+        cv2.imread("explosion1.png", cv2.IMREAD_UNCHANGED),
+        cv2.imread("explosion2.pmg", cv2.IMREAD_UNCHANGED),
+        cv2.imread("explosion3.png", cv2.IMREAD_UNCHANGED),
+        cv2.imread("explosion4.png", cv2.IMREAD_UNCHANGED),
+        cv2.imread("explosion5.png", cv2.IMREAD_UNCHANGED)
       ]
       self.explosion_index  = 0
       self.explosion_active = False
       self.explosion_position = None
       self.explosion_start = None
+
     def identifyGesture(self, result, output_image: mp.Image, timestamp_ms: int):
        if result.gestures:
         #get confidence of gesture
         gesture_name = result.gestures[0][0].category_name
         confidence = result.gestures[0][0].score
         #print(result)
-        #gesture detection
-        if confidence > 0.5:
+        #gesture detection for name displaying and explosion logic
+        if confidence > 0.5 and gesture_name:
             self.gesture_text = f"Gesture: {gesture_name}"
             self.gesture_timestamp = time.time()
             print(self.gesture_text)
+            #check current gesture
+            self.previous_gesture = self.current_gesture
+            self.current_gesture = gesture_name
+            #detect transition for explosion flag
+            if self.current_gesture == "Open_palm":
+              print("Open Palm")
+              self.explosion_active = True
+              self.explosion_start = time.time()
+
+    def palmPosition(self, hand_landmarks):
+      # used to detect the centre of the palm so explosion can be placed
+      wrist = hand_landmarks.landmark[0]
+      palm = hand_landmarks.landmark[9]
+      middle_finger = hand_landmarks.landmark[12]
+      x = (wrist.x + palm.x + middle_finger.x) / 3 # calculates average between positions
+      y = (wrist.y + palm.y + middle_finger.y) / 3
+      return(x, y)
+    
+    def explosion(self, image):
+      #runs the explosion logic
+      if self.explosion_active:
+        elapsed_time = time.time() - self.explosion_start
+        frame_duration = 0.1
+        if elapsed_time > self.explosion_index * frame_duration:
+          image = self.overlayExplosion(image)
+          self.explosion_index += 1
+          if self.explosion_index >= len(self.explosion_images):
+            self.explosion_active = False
+            self.explosion_index = 0
+    
+    def overlayExplosion(self, image):
+      # function houses logic for overlaying explosion on camera frame
+      if self.explosion_position:
+        h, w, _ = image.shape
+        x = int(self.explosion_position[0] * w)
+        y = int(self.explosion_position[1] * h)
+        explosion_frame = self.explosion_images[self.explosion_index]
+        ex_h, ex_w, _ = explosion_frame.shape
+        # making sure explosion stays within frame
+        if x + ex_w > w:
+          x = w - ex_w
+        if y + ex_h > h:
+          y = h - ex_h
+        #create layer mask to discount transparent pixels
+        explosion_mask = explosion_frame[:,:,3] #alpha channel
+        explosion_mask = cv2.merge([explosion_mask, explosion_mask, explosion_mask])
+        #create background and foreground
+        image_bg = image[y:y+ex_h, x:x+ex_w]
+        explosion_fg = cv2.bitwise_and(explosion_frame[:,:,3], explosion_frame[:,:,3], mask=explosion_mask[:,:,0])
+        #inverse
+        inverse_mask = cv2.bitwise_not(explosion_mask)
+        image_bg = cv2.bitwise_and(image_bg, inverse_mask)
+        #combine the two
+        combined = cv2.add(image_bg, explosion_fg)
+        image[y:y+ex_h, x:x+ex_w] = combined
+      return image
 
 class FaceRecogniser():
     def __init__(self):
@@ -154,6 +213,7 @@ class HandFaceTrackApp():
               self.mp_drawing.draw_detection(image, detection)
           if hand_results.multi_hand_landmarks:
             for hand_landmarks in hand_results.multi_hand_landmarks:
+              self.gesture_recognizer_handler.explostion_position = self.gesture_recognizer_handler.palmPosition(hand_landmarks)
               self.mp_drawing.draw_landmarks(
                   image,
                   hand_landmarks,
