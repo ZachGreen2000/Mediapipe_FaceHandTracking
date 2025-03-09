@@ -3,6 +3,7 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import time
+import pygame
 
 
 class GestureRecogniser():
@@ -42,6 +43,8 @@ class FaceRecogniser():
       self.gesture_timestamp_face = 0
 
     def detect_movement(self, image):
+      pygame.mixer.init()
+      talking_sound = pygame.mixer.Sound("talking.wav")
       results = self.face_mesh.process(image)
       if not results.multi_face_landmarks:
         return None
@@ -53,6 +56,8 @@ class FaceRecogniser():
       if lip_distance > 0.02:
         self.face_gesture = "Talking!"
         self.gesture_timestamp_face = time.time()
+        if not pygame.mixer.get_busy():
+          talking_sound.play()
       #to detect head shaking
       current_nose = face_landmarks.landmark[1].x
       if self.initial_nose is not None and abs(current_nose - self.initial_nose) > 0.05:
