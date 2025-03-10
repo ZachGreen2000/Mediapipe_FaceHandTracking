@@ -149,6 +149,7 @@ class FaceRecogniser():
 
 class drawingApp():
     def __init__(self):
+      # variables for the drawing on screen with colour palette
       self.colour_palette = [
           (50, 50, 20, (0,0,255)),
           (150, 50, 20, (0,255,0)),
@@ -160,10 +161,29 @@ class drawingApp():
       self.drawing = False
       self.prev_position = None
       self.drawn_positions = []
-    
+      # variables for shape drawing
+      tri_points = [(10, 250), (50, 200), (90, 250)]
+      self.shapes = [
+        ((10, 50), (10, 100), (0,0,255)),
+        (10, 150, 20, (0,255,0)),
+        (tri_points, (0,255,255))
+      ]
+    # this function draws the colour palette using the colour array and a for loop
     def draw_palette(self, image):
       for x, y, r, colour in self.colour_palette:
         cv2.circle(image, (x, y), r, colour, -1)
+    # this function draws the shape palette to use for drawing using the same logic
+    def draw_shape_palette(self, image):
+      for index, i in enumerate(self.shapes):
+        if index == 0:
+          x, y, colour = self.shapes[0]
+          cv2.rectangle(image, x, y, colour, -1)
+        if index == 1:
+          x, y, r, colour = self.shapes[1]
+          cv2.circle(image, (x, y), r, colour, -1)
+        if index == 2:
+          pts, colour = self.shapes[2]
+          cv2.fillPoly(image, pts, colour)
     
     def select_color(self, x, y):
       for cx, cy, r, colour in self.colour_palette:
@@ -284,6 +304,7 @@ class HandFaceTrackApp():
               self.drawingApp.select_color(self.x, self.y)
           self.drawingApp.draw(image, self.x, self.y)
           self.drawingApp.draw_palette(image)
+          self.drawingApp.draw_shape_palette(image)
           # Flip the image horizontally for a selfie-view display.
           flipped_image = cv2.flip(image, 1)
           if flipped_image is None or flipped_image.size == 0:
