@@ -4,6 +4,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import time
 import pygame
+import numpy as np
 
 
 class GestureRecogniser():
@@ -162,28 +163,30 @@ class drawingApp():
       self.prev_position = None
       self.drawn_positions = []
       # variables for shape drawing
-      tri_points = [(10, 250), (50, 200), (90, 250)]
+      tri_points = np.array([[600, 270], [575, 220], [550, 270]], np.int32)
+      star_points = np.array([[575,180], [600,190], [590,170], [600,155], [585,155], [575,140], [565,155], [550,155], [560,170], [550,190]], np.int32)
       self.shapes = [
-        ((10, 50), (10, 100), (0,0,255)),
-        (10, 150, 20, (0,255,0)),
+        ((600, 50), (550, 100), (0,0,255)),
+        (star_points, (0,255,0)),
         (tri_points, (0,255,255))
       ]
     # this function draws the colour palette using the colour array and a for loop
     def draw_palette(self, image):
       for x, y, r, colour in self.colour_palette:
         cv2.circle(image, (x, y), r, colour, -1)
+
     # this function draws the shape palette to use for drawing using the same logic
     def draw_shape_palette(self, image):
       for index, i in enumerate(self.shapes):
         if index == 0:
-          x, y, colour = self.shapes[0]
-          cv2.rectangle(image, x, y, colour, -1)
+          (x1, y1), (x2, y2), colour = self.shapes[0]
+          cv2.rectangle(image, (x1, y1), (x2, y2), colour, -1)
         if index == 1:
-          x, y, r, colour = self.shapes[1]
-          cv2.circle(image, (x, y), r, colour, -1)
+          spts, colour = self.shapes[1]
+          cv2.fillPoly(image, [spts], colour)
         if index == 2:
           pts, colour = self.shapes[2]
-          cv2.fillPoly(image, pts, colour)
+          cv2.fillPoly(image, [pts], colour)
     
     def select_color(self, x, y):
       for cx, cy, r, colour in self.colour_palette:
