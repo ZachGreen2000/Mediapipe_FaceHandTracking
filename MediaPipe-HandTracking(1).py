@@ -163,13 +163,16 @@ class drawingApp():
       self.prev_position = None
       self.drawn_positions = []
       # variables for shape drawing
+      self.active_shape = None
+      self.selected_shape = "Square" # default shape
+      self.final_shapes = []
       tri_points = np.array([[600, 270], [575, 220], [550, 270]], np.int32)
       star_points = np.array([[575,180], [600,190], [590,170], [600,155], [585,155], [575,140], [565,155], [550,155], [560,170], [550,190]], np.int32)
-      self.shapes = [
-        ((600, 50), (550, 100), (0,0,255)),
-        (star_points, (0,255,0)),
-        (tri_points, (0,255,255))
-      ]
+      self.shapes = {
+        "Square": ((600, 50), (550, 100)),
+        "Star": (star_points),
+        "Triangle": (tri_points)
+      }
     # this function draws the colour palette using the colour array and a for loop
     def draw_palette(self, image):
       for x, y, r, colour in self.colour_palette:
@@ -177,17 +180,27 @@ class drawingApp():
 
     # this function draws the shape palette to use for drawing using the same logic
     def draw_shape_palette(self, image):
-      for index, i in enumerate(self.shapes):
-        if index == 0:
-          (x1, y1), (x2, y2), colour = self.shapes[0]
-          cv2.rectangle(image, (x1, y1), (x2, y2), colour, -1)
-        if index == 1:
-          spts, colour = self.shapes[1]
-          cv2.fillPoly(image, [spts], colour)
-        if index == 2:
-          pts, colour = self.shapes[2]
-          cv2.fillPoly(image, [pts], colour)
+      for shape, bounds in self.shapes.items():
+        if shape == "Square":
+          cv2.rectangle(image, bounds[0], bounds[1], (0,0,255), -1)
+        elif shape == "Star":
+          cv2.fillPoly(image, [bounds], (0,255,0))
+        elif shape == "Triangle":
+          cv2.fillPoly(image, [bounds], (0,255,255))
     
+    def select_shape(self, x, y):
+      for shape, bounds in self.shapes.items():
+        if shape == "Square":
+          (x1, y1), (x2, y2) = bounds
+          if x1 <= x <= x2 and y1 <= y <= y2:
+            self.selected_shape = shape
+            return True
+        else:
+          if cv2.pointPolygonTest(bounds, (x,y), False) >= 0:
+            self.selected_shape = shape
+            return True
+      return False
+
     def select_color(self, x, y):
       for cx, cy, r, colour in self.colour_palette:
         print(f"Coordinates: {x}, {y} vs circle: {cx}, {cy}")
@@ -203,6 +216,59 @@ class drawingApp():
       for position in self.drawn_positions:  
         cv2.circle(image, position, 10, self.selected_colour, -1)
       self.prev_position = (x, y)
+    #below is logic for grabbing and drawing shape
+    def grab_shape(self, image, x, y, hand_closed):
+      img_x, img_y = int(x * image.shape[1]), int(y * image.shape[0])
+      if hand_closed:
+        if self.active_shape:
+          self.active_shape["position"] = (x,y)
+        if self.select_shape(img_x,img_y):
+          print(f"Grabbed shape: {self.selected_shape} at ({x},{y})")
+          self.active_shape = {
+            "type": self.selected_shape,
+            "position": (x,y),
+            "size": 10,
+            "colour": self.selected_colour
+          }
+
+    def grow_shape(self, index_tip, pinky_tip, wrist):
+      print("shape is growing")
+      index_dist = np.linalg.norm(np.array(index_tip.y) - np.array(wrist.y))
+      pinky_dist = np.linalg.norm(np.array(pinky_tip.y) - np.array(wrist.y))
+      openness = (index_dist + pinky_dist) / 2
+      normalised_openness = max(0, min(1,(openness - 50) / (250 - 50)))
+      if self.active_shape:
+        self.active_shape["size"] = max(10, int(normalised_openness * 200))
+
+    def release_shape(self, hand_open):
+      if self.active_shape and not hand_open:
+        self.final_shapes.append(self.active_shape)
+        self.active_shape = None
+    
+    def render_shapes(self, image):
+      for shape in self.final_shapes:
+        self.draw_single_shape(image, shape)
+      if self.active_shape:
+        self.draw_single_shape(image, self.active_shape)
+
+    def draw_single_shape(self, image, shape):
+      h, w, _ = image.shape
+      x = int(shape["position"][0] * w)
+      y = int(shape["position"][1] * h)
+      size = shape["size"]
+      colour = shape["colour"]
+      if shape["type"] == "Square":
+        cv2.rectangle(image, (x - size, y - size), (x + size, y + size), colour, -1)
+      elif shape["type"] == "Triangle":
+         pts = np.array([[x, y - size], [x - size, y + size], [x + size, y + size]], np.int32)
+         cv2.fillPoly(image, [pts], colour)
+      elif shape["type"] == "Star":
+         star_pts = np.array([[x, y - size], [x + size, y - size // 3], [x + size * 2, y - size],
+                                 [x + size * 1.5, y], [x + size * 2, y + size],
+                                 [x, y + size // 2], [x - size * 2, y + size],
+                                 [x - size * 1.5, y], [x - size * 2, y - size],
+                                 [x - size, y - size // 3]], np.int32)
+         cv2.fillPoly(image, [star_pts], colour)
 
 class HandFaceTrackApp():
     def __init__(self, model_path, webcam_id=0):
@@ -297,6 +363,12 @@ class HandFaceTrackApp():
                   self.mp_drawing_styles.get_default_hand_connections_style())
               #logic for drawing app takes index finger top point and pointing up gesture to initiate drawing
               index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
+              wrist = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST]
+              index_base = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP]
+              pinky_base = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP]
+              pinky_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
+              palm_x = (wrist.x + index_base.x + pinky_base.x) / 3
+              palm_y = (wrist.y + index_base.y + pinky_base.y) / 3
               self.x , self.y = int(index_tip.x * image.shape[1]), int(index_tip.y * image.shape[0])
               if self.gesture_recognizer_handler.gesture_name.lower() == "pointing_up":
                 #print("Drawing started")
@@ -304,7 +376,18 @@ class HandFaceTrackApp():
               else:
                 self.drawingApp.drawing = False
                 self.drawingApp.prev_position = None
+              #shape drawing logic
+              gesture_name = self.gesture_recognizer_handler.gesture_name.lower()
+              if gesture_name == "closed_fist":
+                print(f"Gesture active: {gesture_name}")
+                self.drawingApp.grab_shape(image, palm_x,palm_y,hand_closed=True)
+              elif gesture_name == "open_palm":
+                self.drawingApp.release_shape(hand_open=False)
+              else:
+                self.drawingApp.grow_shape(index_tip, pinky_tip, wrist) # shape to expand
+                #print("shape is growing")
               self.drawingApp.select_color(self.x, self.y)
+          self.drawingApp.render_shapes(image)
           self.drawingApp.draw(image, self.x, self.y)
           self.drawingApp.draw_palette(image)
           self.drawingApp.draw_shape_palette(image)
