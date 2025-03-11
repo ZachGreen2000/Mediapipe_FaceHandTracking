@@ -124,6 +124,7 @@ class FaceRecogniser():
       self.initial_nose = None
       self.face_gesture = ""
       self.gesture_timestamp_face = 0
+      self.drawingApp = drawingApp()
 
     def detect_movement(self, image):
       pygame.mixer.init() #sets up sound with pygame
@@ -192,7 +193,10 @@ class drawingApp():
       for shape, bounds in self.shapes.items():
         if shape == "Square":
           (x1, y1), (x2, y2) = bounds
-          if x1 <= x <= x2 and y1 <= y <= y2:
+          print(f"X1: {x1}, Y1: {y1}, X2: {x2}, Y2: {y2}")
+          print(f"X: {x}, Y: {y}")
+          if x2 <= x <= x1 and y1 <= y <= y2:
+            print("selected shape is square")
             self.selected_shape = shape
             return True
         else:
@@ -216,6 +220,7 @@ class drawingApp():
       for position in self.drawn_positions:  
         cv2.circle(image, position, 10, self.selected_colour, -1)
       self.prev_position = (x, y)
+
     #below is logic for grabbing and drawing shape
     def grab_shape(self, image, x, y, hand_closed):
       img_x, img_y = int(x * image.shape[1]), int(y * image.shape[0])
@@ -233,12 +238,16 @@ class drawingApp():
 
     def grow_shape(self, index_tip, pinky_tip, wrist):
       print("shape is growing")
-      index_dist = np.linalg.norm(np.array(index_tip.y) - np.array(wrist.y))
-      pinky_dist = np.linalg.norm(np.array(pinky_tip.y) - np.array(wrist.y))
+      index_dist = abs(index_tip.y - wrist.y)
+      pinky_dist = abs(pinky_tip.y - wrist.y)
       openness = (index_dist + pinky_dist) / 2
-      normalised_openness = max(0, min(1,(openness - 50) / (250 - 50)))
+      normalised_openness = max(0, min(1,(openness - 0.02) / (0.2 - 0.02)))
       if self.active_shape:
-        self.active_shape["size"] = max(10, int(normalised_openness * 200))
+        target_size = max(10, int(normalised_openness * 100))
+        current_size = self.active_shape["size"]
+        smooth_factor = 0.2
+        new_size = int(current_size + (target_size - current_size) * smooth_factor)
+        self.active_shape["size"] = new_size
 
     def release_shape(self, hand_open):
       if self.active_shape and not hand_open:
