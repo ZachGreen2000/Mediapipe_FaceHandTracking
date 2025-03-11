@@ -252,6 +252,7 @@ class drawingApp():
     def release_shape(self, hand_open):
       if self.active_shape and not hand_open:
         self.final_shapes.append(self.active_shape)
+        print(f"List of shapes drawn: {self.final_shapes}")
         self.active_shape = None
     
     def render_shapes(self, image):
@@ -286,6 +287,8 @@ class HandFaceTrackApp():
       if not self.cap.isOpened():
         print("Error: Could not open video capture")
         return
+      self.capture = cv2.VideoWriter_fourcc(*'mp4v')
+      self.capture_out = cv2.VideoWriter('output.avi', self.capture, 20.0, (640, 480))
       print("Webcam initialised")
       self.gesture_recognizer_handler = GestureRecogniser(model_path)
       self.mp_hands = mp.solutions.hands
@@ -340,7 +343,6 @@ class HandFaceTrackApp():
           if image is None or image.size == 0:
             print("Error: Empty frame")
             break
-
           # To improve performance, optionally mark the image as not writeable to
           # pass by reference.
           image.flags.writeable = False
@@ -409,12 +411,14 @@ class HandFaceTrackApp():
           
           flipped_image = self.displayText(flipped_image)
           if flipped_image.shape[0] > 0 and flipped_image.shape[1] > 0:
+            self.capture_out.write(image)
             cv2.imshow('MediaPipe Hands', flipped_image)
           else:
             print("Error: Invalid size for display")
           if cv2.waitKey(5) & 0xFF == ord('q'):
             break
       self.cap.release()
+      self.capture_out.release()
       # Destroying All the windows 
       cv2.destroyAllWindows() 
 
