@@ -6,7 +6,7 @@ import time
 import pygame
 import numpy as np
 
-
+# this class is for the hand gesture recognition which includes using the API and adding the explosions
 class GestureRecogniser():
     def __init__(self, model_path):
       self.model_path = model_path
@@ -36,9 +36,9 @@ class GestureRecogniser():
       for path in explosion_paths:
         img = cv2.imread(path)
         if img is None:
-          print(f"Image is none: {path}")
+          print(f"Image is none: {path}") # debug
         else:
-          print(f"Image loaded: {path}")
+          print(f"Image loaded: {path}") # debug
         self.explosion_images.append(img)
       #changing colour and size of images
       self.explosion_images = [cv2.cvtColor(img, cv2.COLOR_BGR2RGB) for img in self.explosion_images]
@@ -47,7 +47,8 @@ class GestureRecogniser():
       self.explosion_active = False
       self.explosion_position = None
       self.explosion_start = None
-
+    # this function houses the logic for identifying the hand gestures using the API and providing output
+    # also runs sound when open palm for explosion and calls for explosion to run
     def identifyGesture(self, result, output_image: mp.Image, timestamp_ms: int):
        pygame.mixer.init() #sets up sound with pygame
        exploadSound = pygame.mixer.Sound("explosion.wav") #stores sound effect
@@ -68,7 +69,7 @@ class GestureRecogniser():
               self.explosion_start = time.time()
               if not pygame.mixer.get_busy():#makes sure sound isnt already playing
                 exploadSound.play()#plays sound
-
+    # this calculates the palm position
     def palmPosition(self, hand_landmarks):
       # used to detect the centre of the palm so explosion can be placed
       wrist = hand_landmarks.landmark[0]
@@ -78,7 +79,7 @@ class GestureRecogniser():
       y = (wrist.y + palm.y + middle_finger.y) / 3
       #print(f"Palm position: {x, y}")
       return(x, y)
-    
+    # this function houses the logic for determining the frame speed of the explosion and the iteration of explosion
     def explosion(self, image):
       #runs the explosion logic
       if self.explosion_active:
@@ -95,7 +96,7 @@ class GestureRecogniser():
           if self.explosion_index >= len(self.explosion_images):
             self.explosion_active = False
             self.explosion_index = 0
-    
+    # this function takes the explosion images and overlays them on the webcam camera in the intended position
     def overlayExplosion(self, image):
       # function houses logic for overlaying explosion on camera frame
       if self.explosion_position and self.explosion_active:
@@ -117,7 +118,7 @@ class GestureRecogniser():
         #place explosion frame
         image[y:y+ex_h, x:x+ex_w] = explosion_frame
       return image
-
+# this is the class for the facial recognition logic such as talking and head shaking
 class FaceRecogniser():
     def __init__(self):
       self.face_mesh = mp.solutions.face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -125,7 +126,8 @@ class FaceRecogniser():
       self.face_gesture = ""
       self.gesture_timestamp_face = 0
       self.drawingApp = drawingApp()
-
+    # this detect movement function detects facial movement from the face landmarks and determind gesture
+    # the function also handles and plays sound based on gesture
     def detect_movement(self, image):
       pygame.mixer.init() #sets up sound with pygame
       talking_sound = pygame.mixer.Sound("talking.wav") #stores sound effect
@@ -148,7 +150,7 @@ class FaceRecogniser():
         self.face_gesture = "Head shaking!"
         self.gesture_timestamp_face = time.time()
       self.initial_nose = current_nose
-
+# the drawing class is called to account for all the drawing logic on screen, free and shape alike
 class drawingApp():
     def __init__(self):
       # variables for the drawing on screen with colour palette
@@ -188,15 +190,16 @@ class drawingApp():
           cv2.fillPoly(image, [bounds], (0,255,0))
         elif shape == "Triangle":
           cv2.fillPoly(image, [bounds], (0,255,255))
-    
+    # this function works the same as select colour where it gets the position of the shape for current shape
+    # however, it uses calculated positions for the square and pointPolygonTest for the other shapes
     def select_shape(self, x, y):
       for shape, bounds in self.shapes.items():
         if shape == "Square":
           (x1, y1), (x2, y2) = bounds
-          print(f"X1: {x1}, Y1: {y1}, X2: {x2}, Y2: {y2}")
+          print(f"X1: {x1}, Y1: {y1}, X2: {x2}, Y2: {y2}") # debug
           print(f"X: {x}, Y: {y}")
           if x2 <= x <= x1 and y1 <= y <= y2:
-            print("selected shape is square")
+            print("selected shape is square") # debug
             self.selected_shape = shape
             return True
         else:
@@ -204,16 +207,18 @@ class drawingApp():
             self.selected_shape = shape
             return True
       return False
-
+    # this function selects the current colour of the drawing material by checking position of index finger
+    # and comparing it to colour palette position
     def select_color(self, x, y):
       for cx, cy, r, colour in self.colour_palette:
-        print(f"Coordinates: {x}, {y} vs circle: {cx}, {cy}")
+        print(f"Coordinates: {x}, {y} vs circle: {cx}, {cy}") # debug
         if (x - cx) ** 2 + (y - cy) ** 2 <= r ** 2:
-          print(f"changed colour: {self.selected_colour}")
+          print(f"changed colour: {self.selected_colour}") # debug
           self.selected_colour = colour
           return True
       return False
-    
+    # this function is for the free drawing function from the index finger tip
+    # the function appends circles to a list constantly to simulate a drawn line
     def draw(self, image, x, y):
       if self.drawing and self.prev_position:
         self.drawn_positions.append((x, y))
@@ -221,23 +226,24 @@ class drawingApp():
         cv2.circle(image, position, 10, self.selected_colour, -1)
       self.prev_position = (x, y)
 
-    #below is logic for grabbing and drawing shape
+    # Below is logic for grabbing and drawing shape by checking the position of the hand matches shape
     def grab_shape(self, image, x, y, hand_closed):
       img_x, img_y = int(x * image.shape[1]), int(y * image.shape[0])
       if hand_closed:
         if self.active_shape:
           self.active_shape["position"] = (x,y)
         if self.select_shape(img_x,img_y):
-          print(f"Grabbed shape: {self.selected_shape} at ({x},{y})")
+          print(f"Grabbed shape: {self.selected_shape} at ({x},{y})") # debug
           self.active_shape = {
             "type": self.selected_shape,
             "position": (x,y),
             "size": 10,
             "colour": self.selected_colour
           }
-
+    # this function takes the landmarks at index tip, pinky tip and wrist to calculate the distance between them
+    # allowing for the current active shape to be propotionately resized based on the calculation
     def grow_shape(self, index_tip, pinky_tip, wrist):
-      print("shape is growing")
+      print("shape is growing") # debug
       index_dist = abs(index_tip.y - wrist.y)
       pinky_dist = abs(pinky_tip.y - wrist.y)
       openness = (index_dist + pinky_dist) / 2
@@ -248,19 +254,21 @@ class drawingApp():
         smooth_factor = 0.2
         new_size = int(current_size + (target_size - current_size) * smooth_factor)
         self.active_shape["size"] = new_size
-
+    # this function takes the active shape and appends it to the final shapes list but once the gesture becomes open
+    # it releases the shape in its current position on the screen
     def release_shape(self, hand_open):
       if self.active_shape and not hand_open:
         self.final_shapes.append(self.active_shape)
-        print(f"List of shapes drawn: {self.final_shapes}")
+        print(f"List of shapes drawn: {self.final_shapes}") # debug
         self.active_shape = None
-    
+    # this function is constantly called to ensure all drawing is shown on screen
     def render_shapes(self, image):
       for shape in self.final_shapes:
         self.draw_single_shape(image, shape)
       if self.active_shape:
         self.draw_single_shape(image, self.active_shape)
-
+    # this function houses the logic to draw a shape based on which shape is selected and 
+    # positions it based on the x and y coordinates in propotion to the frame
     def draw_single_shape(self, image, shape):
       h, w, _ = image.shape
       x = int(shape["position"][0] * w)
@@ -279,17 +287,18 @@ class drawingApp():
                                  [x - size * 1.5, y], [x - size * 2, y - size],
                                  [x - size, y - size // 3]], np.int32)
          cv2.fillPoly(image, [star_pts], colour)
-
+# this class is for the main loop of the app where the logic for capturing the webcam and
+# recognising hand and face on camera, drawing the landmarks for gesture recognition
 class HandFaceTrackApp():
     def __init__(self, model_path, webcam_id=0):
-      print("Initialising webcam...")
+      print("Initialising webcam...") # debug
       self.cap = cv2.VideoCapture(webcam_id)
       if not self.cap.isOpened():
-        print("Error: Could not open video capture")
+        print("Error: Could not open video capture") #debug
         return
-      self.capture = cv2.VideoWriter_fourcc(*'mp4v')
+      self.capture = cv2.VideoWriter_fourcc(*'mp4v') # for recording output
       self.capture_out = cv2.VideoWriter('output.avi', self.capture, 20.0, (640, 480))
-      print("Webcam initialised")
+      print("Webcam initialised") #debug
       self.gesture_recognizer_handler = GestureRecogniser(model_path)
       self.mp_hands = mp.solutions.hands
       self.face_recogniser_handler = FaceRecogniser()
@@ -300,18 +309,18 @@ class HandFaceTrackApp():
       self.model_path = model_path
       self.x = 0
       self.y = 0
-
+    # setting the frame up
     def frame(self, image):
       image.flags.writeable = False
       image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
       return image
-    
+    # this function takes the webcam and displays text and images dependent on the recognised gesture
     def displayText(self, image):
       try:
         if image is not None:
-          #print(f"Image properties: shape={image.shape}, dtype={image.dtype}, size={image.size}")
+          #print(f"Image properties: shape={image.shape}, dtype={image.dtype}, size={image.size}") #debug
           if image.shape[0] > 0 and image.shape[1] > 0:
-            if time.time() - self.gesture_recognizer_handler.gesture_timestamp < 2:   
+            if time.time() - self.gesture_recognizer_handler.gesture_timestamp < 2: # adjust time text and images displayed for
                 #display text for which gesture
                 cv2.rectangle(image, (50, 370), (400, 410), (19, 69, 139), 50)
                 cv2.putText(image, self.gesture_recognizer_handler.gesture_text, (50, 400),
@@ -321,11 +330,12 @@ class HandFaceTrackApp():
                 cv2.putText(image, (self.face_recogniser_handler.face_gesture), (390,400), 
                             cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 2)
         else:
-          print("Error: Invalid image passed to displayText")
+          print("Error: Invalid image passed to displayText") # debug
       except Exception as e:
-         print(f"Error in displayText: {e}")
+         print(f"Error in displayText: {e}") # debug
       return image
-    
+    # main run function for the app with main loop that runs for hand and face detection
+    # Also in charge of calling functions that provide feedback action when given a gesture
     def run(self): # here the with section starts the hand and face drawing for detection
       with self.mp_hands.Hands(
         model_complexity=0,
@@ -378,7 +388,7 @@ class HandFaceTrackApp():
               index_base = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP]
               pinky_base = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_MCP]
               pinky_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
-              palm_x = (wrist.x + index_base.x + pinky_base.x) / 3
+              palm_x = (wrist.x + index_base.x + pinky_base.x) / 3 # calculations for centre of palm for placement
               palm_y = (wrist.y + index_base.y + pinky_base.y) / 3
               self.x , self.y = int(index_tip.x * image.shape[1]), int(index_tip.y * image.shape[0])
               if self.gesture_recognizer_handler.gesture_name.lower() == "pointing_up":
@@ -390,7 +400,7 @@ class HandFaceTrackApp():
               #shape drawing logic
               gesture_name = self.gesture_recognizer_handler.gesture_name.lower()
               if gesture_name == "closed_fist":
-                print(f"Gesture active: {gesture_name}")
+                print(f"Gesture active: {gesture_name}") # debug
                 self.drawingApp.grab_shape(image, palm_x,palm_y,hand_closed=True)
               elif gesture_name == "open_palm":
                 self.drawingApp.release_shape(hand_open=False)
@@ -405,16 +415,16 @@ class HandFaceTrackApp():
           # Flip the image horizontally for a selfie-view display.
           flipped_image = cv2.flip(image, 1)
           if flipped_image is None or flipped_image.size == 0:
-            print("Error: Invalid image")
+            print("Error: Invalid image") # debug
             break
           #print(f"Flipped image shape: {flipped_image.shape}")
           
           flipped_image = self.displayText(flipped_image)
           if flipped_image.shape[0] > 0 and flipped_image.shape[1] > 0:
-            self.capture_out.write(image)
+            self.capture_out.write(image) # saving footage
             cv2.imshow('MediaPipe Hands', flipped_image)
           else:
-            print("Error: Invalid size for display")
+            print("Error: Invalid size for display") # debug
           if cv2.waitKey(5) & 0xFF == ord('q'):
             break
       self.cap.release()
@@ -422,6 +432,6 @@ class HandFaceTrackApp():
       # Destroying All the windows 
       cv2.destroyAllWindows() 
 
-model_path = "gesture_recognizer.task"
+model_path = "gesture_recognizer.task" # api path
 app = HandFaceTrackApp(model_path)
 app.run()
